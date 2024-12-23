@@ -1,0 +1,85 @@
+services:
+  redis:
+    container_name: redis
+    image: redis:latest
+    command:
+      - redis-server
+    ports:
+      - "6379:6379"
+    restart: on-failure
+    networks:
+      - net_con
+
+  pgsql:
+    container_name: pg_db
+    image: postgres:16
+
+    env_file:
+      - ./.env
+    environment:
+      - POSTGRES_PASSWORD=${PG_PASSWORD}
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_DB=${PG_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pg_data:/var/lib/postgresql/data
+      - ./dumps/users.sql:/docker-entrypoint-initdb.d/001_users.sql
+      - ./dumps/orders_history.sql:/docker-entrypoint-initdb.d/002_orders_history.sql
+      - ./dumps/dishes.sql:/docker-entrypoint-initdb.d/003_dishes.sql
+    restart: on-failure
+    networks:
+      - net_con
+
+  bot:
+    container_name: bot
+    build: .
+    command: python core/main.py
+    env_file:
+      - ./.env
+    develop:
+      watch:
+         - action: sync
+           path: .
+           target: .
+    restart: on-failure
+    depends_on:
+      - redis
+      - pgsql
+    network_mode: "bridge"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  arq:
+    container_name: arq
+    build: .
+    command: python core/schedule/arq_scheduler.py
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: .
+    depends_on:
+      - bot
+    restart: on-failure
+    ports:
+      - "6378:6379"
+    networks:
+      - net_con
+
+#  es:
+#    container_name: elastic
+#    image: ''
+
+
+networks:
+  net_con:
+    driver: bridge
+
+#volumes:
+#  certs:
+#    driver: local
+#  kibana_data:
+#    driver: local
+#  es_data-01:
+#    driver: local

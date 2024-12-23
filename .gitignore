@@ -1,0 +1,8 @@
+.venv/
+dumps/
+pg_data/
+
+tech_support/
+
+http_ca.crt
+.env
